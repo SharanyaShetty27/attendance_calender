@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Attendance Calendar</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f4f4f4; padding: 20px; }
+    h1 { text-align: center; }
+    .calendar { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; margin-top: 10px; }
+    .day, .empty {
+      padding: 20px;
+      background: #fff;
+      border: 1px solid #ccc;
+      text-align: center;
+      cursor: pointer;
+    }
+    .empty { background: #eee; cursor: default; }
+    .day-name {
+      font-weight: bold;
+      background: #ddd;
+      padding: 10px;
+      text-align: center;
+    }
+    .header { display: flex; justify-content: space-between; align-items: center; }
+    button {
+      padding: 5px 10px;
+      margin: 5px;
+      cursor: pointer;
+      background: #007BFF;
+      color: #fff;
+      border: none;
+      border-radius: 5px;
+      transition: background 0.3s, transform 0.2s;
+    }
+    button:hover {
+      background: #0056b3;
+    }
+    button:active {
+      transform: scale(0.95);
+    }
+
+    /* Modal */
+    #timetableModal {
+      display: none;
+      position: fixed; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      background: #fff; padding: 20px; border-radius: 10px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+      min-width: 400px;
+      z-index: 1000;
+    }
+    .overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.5);
+        z-index: 999;
+    }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { border: 1px solid #ccc; padding: 10px; text-align: center; }
+    td.slot { cursor: pointer; }
+    .present { background: #c8f7c5; }
+    .absent { background: #f7c5c5; }
+    .not-taken { background: #e0e0e0; }
+    .timetable-close {
+        float: right;
+        font-size: 24px;
+        font-weight: bold;
+        cursor: pointer;
+    }
+
+    /* Summary */
+    #summary {
+      margin-top: 20px;
+      padding: 10px;
+      background: #fff;
+      border: 1px solid #ccc;
+    }
+    #summary table {
+        margin-bottom: 20px;
+    }
+    .day {
+      transition: background 0.3s, transform 0.2s;
+    }
+    .day:hover {
+      background: #007BFF;
+      color: #fff;
+      transform: scale(1.1);
+    }
+    .day:active {
+      background: #0056b3;
+      transform: scale(1.05);
+    }
+
+    /* Modal Navigation */
+    .modal-navigation {
+      display: flex;
+      justify-content: space-between;
+      margin: 10px 0;
+    }
+  </style>
+</head>
+<body>
+  <h1>📅 Attendance Calendar</h1>
+
+  <div class="header">
+    <button onclick="prevMonth()">⬅️ Prev</button>
+    <h2 id="monthYear"></h2>
+    <button onclick="nextMonth()">Next ➡️</button>
+  </div>
+
+  <div class="calendar" id="calendarHeader">
+    <div class="day-name">Mon</div>
+    <div class="day-name">Tue</div>
+    <div class="day-name">Wed</div>
+    <div class="day-name">Thu</div>
+    <div class="day-name">Fri</div>
+    <div class="day-name">Sat</div>
+    <div class="day-name">Sun</div>
+  </div>
+
+  <div class="calendar" id="calendar"></div>
+
+  <div class="overlay" id="overlay"></div>
+  <div id="timetableModal">
+    <span class="timetable-close" onclick="closeModal()">&times;</span>
+    <h2 id="selectedDate"></h2>
+    <div class="modal-navigation">
+      <button onclick="navigateDay(-1)">⬅️ Previous Day</button>
+      <button onclick="navigateDay(1)">Next Day ➡️</button>
+    </div>
+    <table>
+      <thead>
+        <tr><th>Time</th><th>Subject</th><th>Faculty</th><th>Status</th></tr>
+      </thead>
+      <tbody id="timetableBody"></tbody>
+    </table>
+  </div>
+
+  <div id="summary">
+    <h3>📊 Attendance Summary</h3>
+    <div>
+        <h4>Current Month</h4>
+        <table>
+            <thead>
+                <tr><th>Subject</th><th>Attended</th><th>Total</th><th>Percentage</th></tr>
+            </thead>
+            <tbody id="currentMonthSummary"></tbody>
+        </table>
+    </div>
+    <div>
+        <h4>Cumulative</h4>
+        <table>
+            <thead>
+                <tr><th>Subject</th><th>Attended</th><th>Total</th><th>Percentage</th></tr>
+            </thead>
+            <tbody id="cumulativeSummary"></tbody>
+        </table>
+    </div>
+  </div>
+
+  <script>
+    const weeklyTimetable = {
+        Mon: [
+            ["9:00 - 9:55", "EH", "Ethical Hacking and Network Defense", "Dr. Vijaya Murari T"],
+            ["10:00 - 10:50", "DT", "Design Thinking", "Dr. Shabari Shedthi"],
+            ["11:10 - 12:05", "ICS", "Introduction to Cyber Security and Secure Coding", "Dr. Pradeep Kanchan"],
+            ["1:55 - 3:40", "CF Lab", "Cyber Forensics Lab", "Dr. Sandeep Hegde, Dr. Pallavi K N"]
+        ],
+        Tue: [
+            ["9:00 - 9:55", "CF", "Cyber Forensics", "Dr. Sandeep Hegde"],
+            ["10:00 - 10:50", "CSI", "Cloud security & IOT Security", "Dr. Ashwin Shenoy M"],
+            ["11:10 - 12:05", "DT", "Design Thinking", "Dr. Shabari Shedthi"],
+            ["1:55 - 2:50", "RETP-I", "Research Experience Through Practice - I", "Dr. Raghunandan"]
+        ],
+        Wed: [
+            ["9:00 - 9:55", "DT", "Design Thinking", "Dr. Shabari Shedthi"],
+            ["10:00 - 10:50", "EH", "Ethical Hacking and Network Defense", "Dr. Vijaya Murari T"],
+            ["11:10 - 1:00", "RETP-I", "Research Experience Through Practice - I", "Dr. Raghunandan"],
+            ["1:55 - 2:50", "ICS", "Introduction to Cyber Security (ICS)", "Dr. Pradeep Kanchan"],
+            ["2:50 - 3:40", "CF", "Cyber Forensics", "Dr. Sandeep Hegde"]
+        ],
+        Thu: [
+            ["9:00 - 9:55", "CSI", "Cloud security & IOT Security", "Dr. Ashwin Shenoy M"],
+            ["10:00 - 10:50", "ICS", "Introduction to Cyber Security and Secure Coding", "Dr. Pradeep Kanchan"],
+            ["11:10 - 12:05", "CF", "Cyber Forensics", "Dr. Sandeep Hegde"],
+            ["1:55 - 3:40", "ICS Lab", "Introduction to Cyber Security (ICS)Lab", "Dr. Pradeep Kanchan, Dr. Pallavi K N"]
+        ],
+        Fri: [
+            ["9:00 - 9:55", "CSI", "Cloud security & IOT Security", "Dr. Ashwin Shenoy M"],
+            ["10:00 - 10:50", "ICS", "Introduction to Cyber Security and Secure Coding", "Dr. Pradeep Kanchan"],
+            ["11:10 - 12:05", "EH", "Ethical Hacking and Network Defense", "Dr. Vijaya Murari T"],
+            ["12:05 - 1:00", "CF", "Cyber Forensics", "Dr. Sandeep Hegde"],
+            ["1:55 - 2:50", "RETP-I", "Research Experience Through Practice - I", "Dr. Raghunandan"]
+        ]
+    };
+
+    const statuses = ["present", "absent", "not-taken"];
+    let currentMonth = new Date().getMonth();
+    let currentYear = new Date().getFullYear();
+
+    const calendar = document.getElementById("calendar");
+    const monthYear = document.getElementById("monthYear");
+    const modal = document.getElementById("timetableModal");
+    const overlay = document.getElementById("overlay");
+    const timetableBody = document.getElementById("timetableBody");
+    const selectedDateEl = document.getElementById("selectedDate");
+    const currentMonthSummaryTable = document.getElementById("currentMonthSummary");
+    const cumulativeSummaryTable = document.getElementById("cumulativeSummary");
+
+    function renderCalendar(month, year) {
+      calendar.innerHTML = "";
+      const firstDay = (new Date(year, month, 1).getDay() + 6) % 7;
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      const today = new Date();
+
+      const monthNames = ["January","February","March","April","May","June",
+                          "July","August","September","October","November","December"];
+      monthYear.textContent = `${monthNames[month]} ${year}`;
+
+      for (let i = 0; i < firstDay; i++) {
+        let div = document.createElement("div");
+        div.classList.add("empty");
+        calendar.appendChild(div);
+      }
+
+      for (let day = 1; day <= daysInMonth; day++) {
+        let div = document.createElement("div");
+        div.classList.add("day");
+        div.textContent = day;
+        div.onclick = () => {
+          openTimetable(year, month, day);
+        };
+
+        if (year === today.getFullYear() && month === today.getMonth() && day === today.getDate()) {
+            div.style.border = "2px solid #007BFF";
+        }
+        calendar.appendChild(div);
+      }
+      updateSummary();
+    }
+
+    function prevMonth() {
+      currentMonth--;
+      if (currentMonth < 0) { currentMonth = 11; currentYear--; }
+      renderCalendar(currentMonth, currentYear);
+    }
+
+    function nextMonth() {
+      currentMonth++;
+      if (currentMonth > 11) { currentMonth = 0; currentYear++; }
+      renderCalendar(currentMonth, currentYear);
+    }
+
+    function openTimetable(year, month, day) {
+      const date = new Date(year, month, day);
+      const dayOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][date.getDay()];
+      const dateKey = `${year}-${month+1}-${day}`;
+
+      selectedDateEl.textContent = `${dateKey} (${dayOfWeek})`;
+      timetableBody.innerHTML = "";
+
+      const classesForDay = weeklyTimetable[dayOfWeek] || [];
+      if (classesForDay.length === 0) {
+          let row = document.createElement("tr");
+          let td = document.createElement("td");
+          td.setAttribute("colspan", "4");
+          td.textContent = "No classes on this day.";
+          row.appendChild(td);
+          timetableBody.appendChild(row);
+      } else {
+          classesForDay.forEach(([time, subjectCode, subjectTitle, faculty]) => {
+            let row = document.createElement("tr");
+            row.innerHTML = `
+              <td>${time}</td>
+              <td>${subjectCode}</td>
+              <td>${faculty}</td>
+              <td class="slot" data-key="${dateKey}_${subjectCode}">Click to mark</td>
+            `;
+            timetableBody.appendChild(row);
+          });
+          loadAttendance(dateKey);
+      }
+
+      modal.style.display = "block";
+      overlay.style.display = "block";
+    }
+
+    function closeModal() {
+      modal.style.display = "none";
+      overlay.style.display = "none";
+      updateSummary();
+    }
+
+    function navigateDay(offset) {
+      const [year, month, day] = selectedDateEl.textContent.split(" ")[0].split("-").map(Number);
+      const newDate = new Date(year, month - 1, day + offset);
+      openTimetable(newDate.getFullYear(), newDate.getMonth(), newDate.getDate());
+    }
+
+    timetableBody.addEventListener("click", (e) => {
+      if (e.target.classList.contains("slot")) {
+        let td = e.target;
+        let key = td.dataset.key;
+        let current = statuses.findIndex(s => td.classList.contains(s));
+        td.classList.remove(...statuses);
+        let next = (current + 1) % statuses.length;
+        td.classList.add(statuses[next]);
+        td.textContent = statuses[next];
+        localStorage.setItem(key, statuses[next]);
+      }
+    });
+
+    function loadAttendance(dateKey) {
+      document.querySelectorAll(".slot").forEach(td => {
+        let saved = localStorage.getItem(td.dataset.key);
+        if (saved) {
+          td.classList.add(saved);
+          td.textContent = saved;
+        } else {
+          td.classList.remove(...statuses);
+          td.textContent = "Click to mark";
+        }
+      });
+    }
+
+    function getSummaryData(filterByMonth = false) {
+        let summary = {};
+        const allKeys = Object.keys(localStorage);
+
+        Object.values(weeklyTimetable).forEach(dayClasses => {
+            dayClasses.forEach(([_, subjectCode]) => {
+                if (subjectCode !== "RETP-I") {
+                    if (!summary[subjectCode]) {
+                        summary[subjectCode] = { present: 0, total: 0 };
+                    }
+                }
+            });
+        });
+
+        allKeys.forEach(key => {
+            if (key.includes('_')) {
+                const [datePart, subjectCode] = key.split('_');
+                const [year, month, day] = datePart.split('-').map(Number);
+                const status = localStorage.getItem(key);
+
+                if (subjectCode !== "RETP-I" && summary[subjectCode]) {
+                    if (!filterByMonth || (year === currentYear && month === currentMonth + 1)) {
+                        if (status === "present") {
+                            summary[subjectCode].present++;
+                            summary[subjectCode].total++;
+                        } else if (status === "absent") {
+                            summary[subjectCode].total++;
+                        }
+                    }
+                }
+            }
+        });
+
+        return summary;
+    }
+
+    function renderSummaryTable(summaryData, tableBodyElement) {
+        tableBodyElement.innerHTML = "";
+        const orderedSubjects = Object.keys(summaryData).sort((a, b) => {
+            const aIsLab = a.endsWith("Lab");
+            const bIsLab = b.endsWith("Lab");
+            if (aIsLab && !bIsLab) return 1;
+            if (!aIsLab && bIsLab) return -1;
+            return 0;
+        });
+
+        orderedSubjects.forEach(subjectCode => {
+            const { present, total } = summaryData[subjectCode];
+            const percent = total > 0 ? ((present / total) * 100).toFixed(1) : "N/A";
+
+            let row = document.createElement("tr");
+            row.innerHTML = `
+                <td>${subjectCode}</td>
+                <td>${present}</td>
+                <td>${total}</td>
+                <td>${percent}%</td>
+            `;
+            tableBodyElement.appendChild(row);
+        });
+    }
+    
+    function updateSummary() {
+        const currentMonthData = getSummaryData(true);
+        const cumulativeData = getSummaryData(false);
+
+        renderSummaryTable(currentMonthData, currentMonthSummaryTable);
+        renderSummaryTable(cumulativeData, cumulativeSummaryTable);
+    }
+
+    renderCalendar(currentMonth, currentYear);
+  </script>
+</body>
+</html>
